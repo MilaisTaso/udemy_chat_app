@@ -18,6 +18,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isLogin = true;
+  bool _isLoading = false;
 
   String _enterEmail = '';
   String _enterPassword = '';
@@ -30,6 +31,9 @@ class _AuthScreenState extends State<AuthScreen> {
     _formKey.currentState!.save();
 
     try {
+      setState(() {
+        _isLoading = true;
+      });
       final UserCredential userCredential;
       if (_isLogin) {
         userCredential = await _firebase.signInWithEmailAndPassword(
@@ -52,6 +56,9 @@ class _AuthScreenState extends State<AuthScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error.message ?? 'Authentication failed.'),
       ));
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -116,14 +123,16 @@ class _AuthScreenState extends State<AuthScreen> {
                           },
                         ),
                         const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: _submit,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer),
-                          child: Text(_isLogin ? 'Login' : 'Sign up'),
-                        ),
+                        _isLoading
+                          ? const CircularProgressIndicator()
+                          : ElevatedButton(
+                            onPressed: _submit,
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer),
+                            child: Text(_isLogin ? 'Login' : 'Sign up'),
+                          ),
                         TextButton(
                             onPressed: () {
                               setState(() {
