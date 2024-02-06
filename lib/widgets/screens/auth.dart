@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,12 +22,13 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
 
   String _enterEmail = '';
+  String _enterUsername = '';
   String _enterPassword = '';
   File? _selectedImage;
 
   Future<void> _submit() async {
     final bool isValid = _formKey.currentState!.validate();
-    if (!isValid ||!_isLogin && _selectedImage == null) return;
+    if (!isValid || !_isLogin && _selectedImage == null) return;
 
     _formKey.currentState!.save();
 
@@ -42,11 +44,24 @@ class _AuthScreenState extends State<AuthScreen> {
         userCredential = await _firebase.createUserWithEmailAndPassword(
             email: _enterEmail, password: _enterPassword);
 
-        final Reference storageRef = FirebaseStorage.instance.ref().child('images').child('users').child('${userCredential.user!.uid}.jpg');
-        
+        final Reference storageRef = FirebaseStorage.instance
+            .ref()
+            .child('images')
+            .child('users')
+            .child('${userCredential.user!.uid}.jpg');
+
         await storageRef.putFile(_selectedImage!);
         final String imageUrl = await storageRef.getDownloadURL();
-        print(imageUrl);
+
+        // 一つ前の処理がうまくいかないとFirestoreの処理が走らない
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+              'username': _enterUsername,
+              'email': _enterEmail,
+              'image_url': imageUrl,
+            });
       }
     } on FirebaseAuthException catch (error) {
       if (error.code == 'email-already-in-use') {}
@@ -86,10 +101,12 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!_isLogin) UserImagePicker(
-                          onPickedImage: (pickedImage) async {
-                            _selectedImage = pickedImage;
-                        },),
+                        if (!_isLogin)
+                          UserImagePicker(
+                            onPickedImage: (pickedImage) async {
+                              _selectedImage = pickedImage;
+                            },
+                          ),
                         TextFormField(
                           decoration:
                               const InputDecoration(labelText: 'Email Address'),
@@ -108,6 +125,21 @@ class _AuthScreenState extends State<AuthScreen> {
                             _enterEmail = value!;
                           },
                         ),
+                        if (!_isLogin)
+                        TextFormField(
+                          decoration:
+                              const InputDecoration(labelText: 'username'),
+                          enableSuggestions: false,
+                          validator: (value) {
+                            if (value == null || value.trim().length < 4) {
+                              return 'Please enter at least 4 characters';
+                            }
+                            return null;
+                          },
+                          onSaved: (String? value) {
+                            _enterUsername = value!;
+                          },
+                        ),
                         TextFormField(
                           decoration:
                               const InputDecoration(labelText: 'password'),
@@ -124,15 +156,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         const SizedBox(height: 12),
                         _isLoading
-                          ? const CircularProgressIndicator()
-                          : ElevatedButton(
-                            onPressed: _submit,
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer),
-                            child: Text(_isLogin ? 'Login' : 'Sign up'),
-                          ),
+                            ? const CircularProgressIndicator()
+                            : ElevatedButton(
+                                onPressed: _submit,
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer),
+                                child: Text(_isLogin ? 'Login' : 'Sign up'),
+                              ),
                         TextButton(
                             onPressed: () {
                               setState(() {
